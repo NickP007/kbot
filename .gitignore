@@ -1,1 +1,8 @@
 kbot
+.env
+helm/templates/tests/
+helm/templates/hpa.yaml
+helm/templates/ingress.yaml
+helm/templates/service.yaml
+helm/templates/serviceaccount.yaml
+helm/templates/NOTES.txt
