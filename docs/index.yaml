@@ -3,12 +3,12 @@ entries:
   kbot:
   - apiVersion: v2
     appVersion: 1.0.4
-    created: "2023-05-19T04:11:20.593111578Z"
+    created: "2023-05-19T06:41:09.227314031Z"
     description: A Helm chart for Kubernetes
-    digest: d73206537cc0081687411a3e84ec6ffa1ebefe20a377c1de94cc51625e1b0179
+    digest: 9ae11db78240fbee96a5cc4484af979b41e878f572430f2ae2cb4984bca9e366
     name: kbot
     type: application
     urls:
     - https://Nickp007.github.io/kbot/kbot-0.1.1.tgz
     version: 0.1.1
-generated: "2023-05-19T04:11:20.592622872Z"
+generated: "2023-05-19T06:41:09.226811717Z"
