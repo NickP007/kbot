@@ -33,7 +33,7 @@ spec:
       volumes:
       - hostPath:
           path: /dev/mem
-          type: hostPath
+          type: ""
         name: dev-mem
       containers:
         - name: {{ .Chart.Name }}
