@@ -15,7 +15,7 @@ image:
   arch: amd64
 
 secret:
-  name: kbot
+  name: kbot-secret
   tokenKey: token
   tokenName: TELE_TOKEN
 
