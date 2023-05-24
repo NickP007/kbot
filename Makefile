@@ -1,6 +1,6 @@
 APP=$(shell basename $(shell git remote get-url origin))
-REGISTRY=ghcr.io#docker.io
-REPOSITORY=nickp007#nickp6
+REGISTRY=docker.io
+REPOSITORY=nickp6
 VERSION=$(shell git describe --tags --abbrev=0)-$(shell git rev-parse --short HEAD)
 TARGETOS=linux
 TARGETARCH=$(shell dpkg --print-architecture)

@@ -6,10 +6,13 @@ on:
       - "develop"
 
 env:
+  APP: kbot
   REGISTRY: ghcr.io
   REPOSITORY: ${{ github.actor }}
   TARGETOS: linux
   TARGETARCH: amd64
+  HELM_CHART: "0.1.3"
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   ci:
@@ -22,6 +25,8 @@ jobs:
         uses: actions/Checkout@v3
         with:
           fetch-depth: 0
+      - name: Set env.repository to lowercase
+        run: echo "REPOSITORY=${REPOSITORY,,}" >> $GITHUB_ENV
       - name: Run test
         run: make test
       - name: Login with Github Container registry
@@ -32,9 +37,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build&Push
         env:
-          APP: "kbot"
+          APP: ${{ env.APP }}
           REGISTRY: ${{ env.REGISTRY }}
           REPOSITORY: ${{ env.REPOSITORY }}
+          TARGETOS: ${{ env.TARGETOS }}
+          TARGETARCH: ${{ env.TARGETARCH }}
         run: make image push
 
   cd:
@@ -45,12 +52,27 @@ jobs:
     - uses: actions/Checkout@v3
       with:
         fetch-depth: 0
-    - run: echo "VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+    - run: |
+        echo "REPOSITORY=${REPOSITORY,,}" >> $GITHUB_ENV
+        echo "VER_NUM=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV 
+        echo "VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)" >> $GITHUB_ENV
     - uses: mikefarah/yq@master
       with:
-        cmd: yq -i '.image.registry=strenv(REGISTRY) | .image.repository=strenv(REPOSITORY) | .image.tag=strenv(VERSION) | .image.os=strenv(TARGETOS) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+        cmd: |
+          yq -i '.image.registry=strenv(REGISTRY) | .image.repository=strenv(REPOSITORY) | .image.tag=strenv(VERSION) | .image.os=strenv(TARGETOS) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+          yq -i '.appVersion=strenv(VERSION) | .version=strenv(HELM_CHART)' helm/Chart.yaml
     - run: |
+        helm package helm/ -d docs/
+        helm repo index docs/ --url https://Nickp007.github.io/kbot/
         git config user.name github-actions
         git config user.email github-actions@github.com
+        git add docs/$APP-$HELM_CHART.tgz
         git commit -am "update version $VERSION"
         git push
+        if [ "$(gh release view $VER_NUM 2>&1 | grep 'release not found' | wc -l)" = 1 ]; then 
+          gh release create $VER_NUM --title "NP Kbot $VER_NUM" --draft=false --prerelease=false --generate-notes --latest;
+        fi
+        if [ "$(gh release view $VER_NUM --json assets --jq 'map(.[].name)' 2>&1 | grep $APP-$HELM_CHART.tgz | wc -l)" -gt 0 ]; then
+          gh release delete-asset $VER_NUM $APP-$HELM_CHART.tgz -y;
+        fi
+        gh release upload $VER_NUM docs/$APP-$HELM_CHART.tgz
