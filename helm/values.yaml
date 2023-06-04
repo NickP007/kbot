@@ -8,10 +8,10 @@ autoscaling:
 ingress:
   enabled: false
 image:
-  registry: "docker.io"
-  repository: "nickp6"
+  registry: "ghcr.io"
+  repository: "nickp007"
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.0.6-fe82595"
+  tag: "v1.0.6-d8720a1"
   os: linux
   arch: amd64
 secret:
