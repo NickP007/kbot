@@ -12,7 +12,7 @@ DevOps application from scratch / DevOps застосунок з нуля
 
 - автоматичний запуск Action Workflow при push до репозиторію у гілку develop.
 
-[![Run Workflow](https://github.com/NickP007/kbot/actions/workflows/cicd.yaml/badge.svg)](https://github.com/NickP007/kbot/actions/workflows/cicd.yaml)
+[![Run Workflow](https://github.com/NickP007/kbot/actions/workflows/cicd-develop.yaml/badge.svg)](https://github.com/NickP007/kbot/actions/workflows/cicd-develop.yaml)
 
 
 ### v1.0.4

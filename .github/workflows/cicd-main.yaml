@@ -1,0 +1,107 @@
+name: KBOT-CICD-main
+
+on:
+  push:
+    branches:
+      - "main"
+
+env:
+  APP: kbot
+  REGISTRY: docker.io
+  REPOSITORY: ${{ vars.DOCKERHUB_USERNAME }}
+  TARGETOS: linux
+  TARGETARCH: amd64
+  HELM_CHART: "0.1.3"
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  tag:
+    name: GIT_TAG
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get-latest-tag
+      - uses: actions-ecosystem/action-bump-semver@v1
+        id: bump-semver
+        with:
+          current_version: ${{ steps.get-latest-tag.outputs.tag }}
+          level: patch
+      - uses: actions-ecosystem/action-push-tag@v1
+        with:
+          tag: ${{ steps.bump-semver.outputs.new_version }}
+          message: '${{ steps.bump-semver.outputs.new_version }}: PR #${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}'
+
+  ci:
+    name: CI
+    needs: tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/Checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set env variables
+        run: |
+          echo "REPOSITORY=${REPOSITORY,,}" | tee env.txt >> $GITHUB_ENV
+          echo "VER_NUM=$(git describe --tags --abbrev=0)" | tee -a env.txt >> $GITHUB_ENV
+          echo "VERSION=$(git describe --tags --abbrev=0)-$(git rev-parse --short HEAD)" | tee -a env.txt >> $GITHUB_ENV
+          echo "HELM_CHART=$(yq eval '.version' helm/Chart.yaml | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')" | tee -a env.txt >> $GITHUB_ENV
+      - name: Run test
+        run: make test
+      - name: Login with Github Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.REPOSITORY }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build&Push
+        env:
+          APP: ${{ env.APP }}
+          REGISTRY: ${{ env.REGISTRY }}
+          REPOSITORY: ${{ env.REPOSITORY }}
+          TARGETOS: ${{ env.TARGETOS }}
+          TARGETARCH: ${{ env.TARGETARCH }}
+        run: make image push
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: global_env
+          path: env.txt
+
+  cd:
+    name: CD
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/Checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Download artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: global_env
+    - run: cat env.txt >> $GITHUB_ENV
+    - run: |
+        cat env.txt
+        env | sort
+    - uses: mikefarah/yq@master
+      with:
+        cmd: |
+          yq -i '.image.registry=strenv(REGISTRY) | .image.repository=strenv(REPOSITORY) | .image.tag=strenv(VERSION) | .image.os=strenv(TARGETOS) | .image.arch=strenv(TARGETARCH)' helm/values.yaml
+          yq -i '.appVersion=strenv(VERSION) | .version=strenv(HELM_CHART)' helm/Chart.yaml
+    - run: |
+        helm package helm/ -d docs/
+        helm repo index docs/ --url https://Nickp007.github.io/kbot/
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add docs/$APP-$HELM_CHART.tgz
+        git commit -am "update version $VERSION. Create relese $VER_NUM"
+        git push
+        if [ "$(gh release view $VER_NUM 2>&1 | grep 'release not found' | wc -l)" = 1 ]; then 
+          gh release create $VER_NUM --title "NP Kbot $VER_NUM" --draft=false --prerelease=false --generate-notes --latest;
+        fi
+        if [ "$(gh release view $VER_NUM --json assets --jq 'map(.[].name)' 2>&1 | grep $APP-$HELM_CHART.tgz | wc -l)" -gt 0 ]; then
+          gh release delete-asset $VER_NUM $APP-$HELM_CHART.tgz -y;
+        fi
+        gh release upload $VER_NUM docs/$APP-$HELM_CHART.tgz
