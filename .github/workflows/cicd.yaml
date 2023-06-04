@@ -1,4 +1,4 @@
-name: KBOT-CICD
+name: KBOT-CICD-develop
 
 on:
   push:
@@ -76,3 +76,4 @@ jobs:
           gh release delete-asset $VER_NUM $APP-$HELM_CHART.tgz -y;
         fi
         gh release upload $VER_NUM docs/$APP-$HELM_CHART.tgz
+
