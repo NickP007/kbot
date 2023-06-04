@@ -7,23 +7,19 @@ autoscaling:
   enabled: false
 ingress:
   enabled: false
-
 image:
   registry: "docker.io"
   repository: "nickp6"
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.0.5-ff8a6d9"
+  tag: "v1.0.6-fe82595"
   os: linux
   arch: amd64
-
 secret:
   name: kbot-secret
   tokenKey: token
   tokenName: TELE_TOKEN
-  tokenValue: 
-
+  tokenValue:
 service:
   port: 80
-
 securityContext:
   privileged: true
