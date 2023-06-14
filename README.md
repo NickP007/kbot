@@ -5,6 +5,15 @@ DevOps application from scratch / DevOps застосунок з нуля
 
 Посилання на бота:  https://t.me/NickP_study_bot
 
+### v1.0.6
+Додано:
+
+- автоматичний запуск Action Workflow при push до репозиторію у гілку main.
+
+- Jenkins pipeline на мові groovy для білду артефакту за допомогою Jenkins
+
+- виправлення та доопрацювання файлів Makefile та Dockerfile
+
 ### v1.0.5
 Додано:
 
@@ -12,7 +21,7 @@ DevOps application from scratch / DevOps застосунок з нуля
 
 - автоматичний запуск Action Workflow при push до репозиторію у гілку develop.
 
-[![Run Workflow](https://github.com/NickP007/kbot/actions/workflows/cicd.yaml/badge.svg)](https://github.com/NickP007/kbot/actions/workflows/cicd.yaml)
+[![Run Workflow](https://github.com/NickP007/kbot/actions/workflows/cicd-develop.yaml/badge.svg)](https://github.com/NickP007/kbot/actions/workflows/cicd-develop.yaml)
 
 
 ### v1.0.4
