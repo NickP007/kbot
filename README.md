@@ -10,9 +10,9 @@ DevOps application from scratch / DevOps застосунок з нуля
 
 - автоматичний запуск Action Workflow при push до репозиторію у гілку main.
 
-- Jenkins pipeline на мові groovy для білду артефакту за допомогою Jenkins
+- Jenkins pipeline на мові groovy для білду артефакту за допомогою Jenkins.
 
-- виправлення та доопрацювання файлів Makefile та Dockerfile
+Виправлення та доопрацювання файлів Makefile та Dockerfile.
 
 ### v1.0.5
 Додано:

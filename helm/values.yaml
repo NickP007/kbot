@@ -22,6 +22,9 @@ secret:
   tokenName: TELE_TOKEN
   tokenValue: 
 
+env:
+  metrics_host: "opentelemetry-collector:4317"
+
 service:
   port: 80
 

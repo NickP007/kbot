@@ -51,6 +51,8 @@ spec:
               secretKeyRef:
                 key: {{ .Values.secret.tokenKey }}
                 name: {{ .Values.secret.name }}
+          - name: "METRICS_HOST"
+            value: {{ .Values.env.metrics_host }}
 {{- /*
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
