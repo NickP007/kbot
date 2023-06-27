@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -34,6 +35,7 @@ var (
 	// TracesHost exporter host:port
 	TracesHost = os.Getenv("TRACES_HOST")
 )
+var otlp_grpc = "55680"
 
 // Initialize OpenTelemetry
 func initMetrics(ctx context.Context) {
@@ -83,6 +85,9 @@ func initTraces(ctx context.Context) {
 		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> failed to create resource: 'kbot-trace-service'")
 		return
 	}
+
+	endpoint := strings.Split(TracesHost, ":")
+	if len(endpoint) == 1 { TracesHost = TracesHost + ":" + otlp_grpc }
 
 	// Set up a trace exporter
 	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(TracesHost), otlptracegrpc.WithInsecure())

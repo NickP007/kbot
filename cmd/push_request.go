@@ -30,7 +30,8 @@ func push_request(text string) {
 	logger := level.NewFilter(log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout)), serverConfig.LogLevel.Gokit)
 	serverConfig.Log = logging.GoKit(logger)
 
-	os.Setenv("JAEGER_AGENT_HOST", TracesHost)
+	endpoint := strings.Split(TracesHost, ":")
+	os.Setenv("JAEGER_AGENT_HOST", endpoint[0])
 	os.Setenv("JAEGER_TAGS", "cluster=cloud,namespace=demo")
 	os.Setenv("JAEGER_SAMPLER_TYPE", "const")
 	os.Setenv("JAEGER_SAMPLER_PARAM", "1")
