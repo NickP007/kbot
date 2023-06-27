@@ -24,6 +24,8 @@ secret:
 
 env:
   metrics_host: "opentelemetry-collector:4317"
+  traces_host: "tempo-distributor"
+  app_url: "http://app.tns.svc.cluster.local"
 
 service:
   port: 80

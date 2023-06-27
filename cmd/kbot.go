@@ -6,6 +6,7 @@ package cmd
 import (
 	"context" // "log"
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 
@@ -13,10 +14,15 @@ import (
 
 	"github.com/hirosassa/zerodriver"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
+	"go.opentelemetry.io/otel/trace"
 	telebot "gopkg.in/telebot.v3"
 )
 
@@ -25,6 +31,8 @@ var (
 	TeleToken = os.Getenv("TELE_TOKEN")
 	// MetricsHost exporter host:port
 	MetricsHost = os.Getenv("METRICS_HOST")
+	// TracesHost exporter host:port
+	TracesHost = os.Getenv("TRACES_HOST")
 )
 
 // Initialize OpenTelemetry
@@ -58,6 +66,46 @@ func initMetrics(ctx context.Context) {
 
 }
 
+// Initializes an OTLP exporter, and configures the corresponding trace and
+// metric providers.
+func initTraces(ctx context.Context) {
+
+	logger := zerodriver.NewProductionLogger()
+
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			// the service name used to display traces in backends
+			semconv.ServiceName("kbot-trace-service"),
+			semconv.ServiceNameKey.String(AppVersion),
+		),
+	)
+	if err != nil {
+		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> failed to create resource: 'kbot-trace-service'")
+		return
+	}
+
+	// Set up a trace exporter
+	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure())
+	if err != nil {
+		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> failed to create trace exporter")
+		return
+	}
+
+	// Register the trace exporter with a TracerProvider, using a batch
+	// span processor to aggregate spans before export.
+	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithResource(res),
+		sdktrace.WithSpanProcessor(bsp),
+	)
+	otel.SetTracerProvider(tracerProvider)
+
+	// set global propagator to tracecontext (the default is no-op).
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+}
+
 func push_metrics(ctx context.Context, payload string) {
 	// Get the global MeterProvider and create a new Meter with the name "kbot_light_signal_counter"
 	meter := otel.GetMeterProvider().Meter("kbot_command")
@@ -81,9 +129,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		/* rem old release
-		- fmt.Printf("%s started\n", AppVersion)
-		*/
+
 		logger := zerodriver.NewProductionLogger()
 
 		kbot, err := telebot.NewBot(telebot.Settings{
@@ -100,28 +146,47 @@ to quickly create a Cobra application.`,
 		}
 
 		kbot.Handle(telebot.OnText, func(m telebot.Context) error {
+			ctx := context.Background()
+			tracer := otel.Tracer("kbot")
+			ctx, span := tracer.Start(ctx,
+				"OnText",
+				trace.WithAttributes(attribute.String("component", "kbot")),
+				trace.WithAttributes(attribute.String("TraceID", trace.TraceID{1, 2, 3, 4}.String())),
+			)
+			defer span.End()
+			trace_id := span.SpanContext().TraceID().String()
 			payload := m.Message().Payload
 			msg_text := m.Text()
+			metric_label := "undefined"
+			logger.Info().Str("TraceID", trace_id).Msg(payload)
 			logger.Info().Str("Income message:", msg_text).Msg(payload)
-			push_metrics(context.Background(), payload)
 
 			switch payload {
 			case "hello":
 				err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
+				metric_label = "hello"
 			case "":
 				switch msg_text {
 				case "/start":
 					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
+					metric_label = "start"
 				case "/help":
 					err = m.Send("NP Kbot help page... be soon")
+					metric_label = "help"
 				case "/hello", "hello":
 					err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
+					metric_label = "hello"
 				case "ping":
 					err = m.Send("Pong")
+					metric_label = "ping"
 				}
+			case "get":
+				push_request(msg_text)
+				metric_label = "get"
 			default:
 				err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 			}
+			push_metrics(context.Background(), metric_label)
 
 			return err
 		})
@@ -130,8 +195,10 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
 	ctx := context.Background()
 	initMetrics(ctx)
+	initTraces(ctx)
 	rootCmd.AddCommand(kbotCmd)
 
 	// Here you will define your flags and configuration settings.
