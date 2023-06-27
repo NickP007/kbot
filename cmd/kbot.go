@@ -85,7 +85,7 @@ func initTraces(ctx context.Context) {
 	}
 
 	// Set up a trace exporter
-	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithInsecure())
+	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(TracesHost), otlptracegrpc.WithInsecure())
 	if err != nil {
 		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> failed to create trace exporter")
 		return
@@ -157,10 +157,20 @@ to quickly create a Cobra application.`,
 			trace_id := span.SpanContext().TraceID().String()
 			payload := m.Message().Payload
 			msg_text := m.Text()
+			msg_out := ""
 			metric_label := "undefined"
 			logger.Info().Str("TraceID", trace_id).Msg(payload)
 			logger.Info().Str("Income message:", msg_text).Msg(payload)
 
+			pushRequest := func(payload string) (string, string) {
+				strTime := time.Now()
+				push_request(payload)
+				endTime := time.Now()
+				duration := endTime.Sub(strTime)
+				msg_out := fmt.Sprintf("Start request() at %s\nEnd request() at %s\nDuration: %s", strTime.Format("15:04:05.12340"), endTime.Format("15:04:05.12340"),duration)
+				metric_label := "get"
+				return msg_out, metric_label
+			}
 			switch payload {
 			case "hello":
 				err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
@@ -179,15 +189,20 @@ to quickly create a Cobra application.`,
 				case "ping":
 					err = m.Send("Pong")
 					metric_label = "ping"
+				case "/get":
+					msg_out, metric_label = pushRequest(payload)
+					err = m.Send(msg_out, telebot.ModeHTML)
 				}
-			case "get":
-				push_request(msg_text)
-				metric_label = "get"
 			default:
-				err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
+				switch msg_text {
+				case "/get":
+					msg_out, metric_label = pushRequest(payload)
+					err = m.Send(msg_out, telebot.ModeHTML)
+				default:
+					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
+				}
 			}
 			push_metrics(context.Background(), metric_label)
-
 			return err
 		})
 		kbot.Start()
