@@ -16,16 +16,17 @@ import (
 	"github.com/hirosassa/zerodriver"
 	"github.com/opentracing/opentracing-go"
 	"github.com/weaveworks/common/tracing"
+	otelBridge "go.opentelemetry.io/otel/bridge/opentracing"
 	"go.opentelemetry.io/otel"
-	// "go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	// "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	// "go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	// sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
-	// "go.opentelemetry.io/otel/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
+	"go.opentelemetry.io/otel/trace"
 	telebot "gopkg.in/telebot.v3"
 )
 
@@ -38,6 +39,11 @@ var (
 	TracesHost = os.Getenv("TRACES_HOST")
 )
 var otlp_grpc = "4317"
+var (
+	otelTracer            trace.Tracer
+	bridgeTracer          *otelBridge.BridgeTracer
+	wrapperTracerProvider *otelBridge.WrapperTracerProvider
+)
 
 // Initialize OpenTelemetry
 func initMetrics(ctx context.Context) {
@@ -72,10 +78,10 @@ func initMetrics(ctx context.Context) {
 
 // Initializes an OTLP exporter, and configures the corresponding trace and
 // metric providers.
-func initTraces() {
+func initTraces(ctx context.Context) {
 
 	logger := zerodriver.NewProductionLogger()
-/*
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			// the service name used to display traces in backends
@@ -106,11 +112,14 @@ func initTraces() {
 		sdktrace.WithResource(res),
 		sdktrace.WithSpanProcessor(bsp),
 	)
-	otel.SetTracerProvider(tracerProvider)
+	otelTracer = tracerProvider.Tracer("kbot_tracer")
+	bridgeTracer, wrapperTracerProvider = otelBridge.NewTracerPair(otelTracer)
+	//otel.SetTracerProvider(tracerProvider)
+	otel.SetTracerProvider(wrapperTracerProvider)
 
 	// set global propagator to tracecontext (the default is no-op).
 	otel.SetTextMapPropagator(propagation.TraceContext{})
-*/
+/*
 	endpoint := strings.Split(TracesHost, ":")
 	os.Setenv("JAEGER_AGENT_HOST", endpoint[0])
 	os.Setenv("JAEGER_TAGS", "cluster=cloud,namespace=demo")
@@ -122,7 +131,7 @@ func initTraces() {
 		return
 	}
 	defer trace.Close()
-
+*/
 }
 
 func push_metrics(ctx context.Context, payload string) {
@@ -166,15 +175,24 @@ to quickly create a Cobra application.`,
 
 		kbot.Handle(telebot.OnText, func(m telebot.Context) error {
 			ctx := context.Background()
-			span, ctx := opentracing.StartSpanFromContext(ctx, "kbot_get_app")
-			defer span.Finish()
-			trace_id, _ := tracing.ExtractTraceID(ctx)
+			otel_ctx, otel_span := otelTracer.Start(ctx,
+				"OnText",
+				trace.WithAttributes(attribute.String("component", "kbot")),
+				trace.WithAttributes(attribute.String("TraceID", trace.TraceID{}.String())),
+			)
+			defer otel_span.End()
+			br_ctx := bridgeTracer.ContextWithBridgeSpan(otel_ctx, otel_span)
+			otrc_span, otrc_ctx := opentracing.StartSpanFromContext(br_ctx, "kbot_get_app")
+			defer otrc_span.Finish()
+			otel_trace_id := otel_span.SpanContext().TraceID().String()
+			otrc_trace_id, _ := tracing.ExtractTraceID(otrc_ctx)
 			payload := m.Message().Payload
 			msg_text := m.Text()
 			msg_out := ""
 			metric_label := "undefined"
-			logger.Info().Str("TraceID", trace_id).Msg(payload)
 			logger.Info().Str("Income message:", msg_text).Msg(payload)
+			logger.Info().Str("OpenTelemetry TraceID:", otel_trace_id)
+			logger.Info().Str("OpenTracing TraceID:", otrc_trace_id)
 
 			pushRequest := func(ctx context.Context, payload string, trace_id string) (string, string) {
 				strTime := time.Now()
@@ -204,19 +222,19 @@ to quickly create a Cobra application.`,
 					err = m.Send("Pong")
 					metric_label = "ping"
 				case "/get":
-					msg_out, metric_label = pushRequest(ctx, payload, trace_id)
+					msg_out, metric_label = pushRequest(ctx, payload, otel_trace_id)
 					err = m.Send(msg_out, telebot.ModeHTML)
 				}
 			default:
 				if strings.HasPrefix(msg_text, "/get") {
-					msg_out, metric_label = pushRequest(ctx, payload, trace_id)
+					msg_out, metric_label = pushRequest(ctx, payload, otel_trace_id)
 					err = m.Send(msg_out, telebot.ModeHTML)
 				} else {
 					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 				}
 			}
 			push_metrics(context.Background(), metric_label)
-			span.Finish()
+			otrc_span.Finish()
 			return err
 		})
 		kbot.Start()
@@ -227,7 +245,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 	ctx := context.Background()
 	initMetrics(ctx)
-	initTraces()
+	initTraces(ctx)
 	rootCmd.AddCommand(kbotCmd)
 
 	// Here you will define your flags and configuration settings.

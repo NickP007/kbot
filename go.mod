@@ -6,9 +6,11 @@ require (
 	github.com/go-kit/log v0.2.1
 	github.com/grafana/tns v0.0.0-20230616182516-0da270ec6220
 	github.com/hirosassa/zerodriver v0.1.4
+	github.com/opentracing/opentracing-go v1.2.0
 	github.com/spf13/cobra v1.7.0
 	github.com/weaveworks/common v0.0.0-20230531151736-e2613bee6b73
 	go.opentelemetry.io/otel v1.16.0
+	go.opentelemetry.io/otel/bridge/opentracing v1.16.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.16.0
 	go.opentelemetry.io/otel/sdk v1.16.0
@@ -40,7 +42,6 @@ require (
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/opentracing-contrib/go-grpc v0.0.0-20210225150812-73cb765af46e // indirect
 	github.com/opentracing-contrib/go-stdlib v1.0.0 // indirect
-	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
