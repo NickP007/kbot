@@ -15,50 +15,35 @@ import (
 	"github.com/grafana/tns/client"
 	"github.com/weaveworks/common/logging"
 	"github.com/weaveworks/common/server"
-	"github.com/weaveworks/common/tracing"
+	// "github.com/weaveworks/common/tracing"
 )
 
 var (
 	// Define App host Url
 	AppUrl = os.Getenv("APP_URL")
+	app_str string
+	c *client.Client
+	logger log.Logger
 )
-
-func push_request(ctx context.Context, text string) {
+func init() {
 	serverConfig := server.Config{
-		MetricsNamespace: "tns",
+		MetricsNamespace: "demo",
 	}
 	serverConfig.LogLevel.Set("debug")
 
-	logger := level.NewFilter(log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout)), serverConfig.LogLevel.Gokit)
+	logger = level.NewFilter(log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout)), serverConfig.LogLevel.Gokit)
 	serverConfig.Log = logging.GoKit(logger)
-
-	/*  // duplicate metrics collector registration attempted [recovered]
-	endpoint := strings.Split(TracesHost, ":")
-	os.Setenv("JAEGER_AGENT_HOST", endpoint[0])
-	os.Setenv("JAEGER_TAGS", "cluster=cloud,namespace=demo")
-	os.Setenv("JAEGER_SAMPLER_TYPE", "const")
-	os.Setenv("JAEGER_SAMPLER_PARAM", "1")
-	trace, err := tracing.NewFromEnv("kbot-j")
-	if err != nil {
-		level.Error(logger).Log("msg", "error initializing tracing", "err", err)
-		return
-	}
-	defer trace.Close()
-	*/
-	trace_id, exist := tracing.ExtractTraceID(ctx)
-	if exist {
-		level.Debug(logger).Log("msg", "<push_request> extract trace id:", "traceID", trace_id)
-	} else {
-		level.Debug(logger).Log("msg", "<push_request> can't extract trace id", "traceID", trace_id)
-	}
 
 	app, err := url.Parse(AppUrl)
 	if err != nil {
 		level.Error(logger).Log("msg", "<push_request> error initializing tracing", "err", err)
 		return
 	}
+	app_str = app.String()
+	c = client.New(logger)
+}
 
-	c := client.New(logger)
+func push_request(ctx context.Context, text string) {
 	quit := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -70,7 +55,7 @@ func push_request(ctx context.Context, text string) {
 			case <-quit:
 				return
 			case <-timer.C:
-				req, err := http.NewRequest("GET", app.String(), nil)
+				req, err := http.NewRequest("GET", app_str, nil)
 				if err != nil {
 					level.Error(logger).Log("msg", "error building request", "err", err)
 					return
@@ -98,7 +83,7 @@ func push_request(ctx context.Context, text string) {
 			case <-ticker.C:
 				form := url.Values{}
 				form.Add("text", text)
-				req, err := http.NewRequest("POST", app.String()+"/post", strings.NewReader(form.Encode()))
+				req, err := http.NewRequest("POST", app_str+"/post", strings.NewReader(form.Encode()))
 				req = req.WithContext(ctx)
 				if err != nil {
 					level.Error(logger).Log("msg", "error building request", "err", err)
