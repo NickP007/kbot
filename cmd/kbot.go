@@ -35,7 +35,7 @@ var (
 	// TracesHost exporter host:port
 	TracesHost = os.Getenv("TRACES_HOST")
 )
-var otlp_grpc = "55680"
+var otlp_grpc = "4317"
 
 // Initialize OpenTelemetry
 func initMetrics(ctx context.Context) {
@@ -167,9 +167,9 @@ to quickly create a Cobra application.`,
 			logger.Info().Str("TraceID", trace_id).Msg(payload)
 			logger.Info().Str("Income message:", msg_text).Msg(payload)
 
-			pushRequest := func(payload string) (string, string) {
+			pushRequest := func(ctx context.Context, payload string) (string, string) {
 				strTime := time.Now()
-				push_request(payload)
+				push_request(ctx, payload)
 				endTime := time.Now()
 				duration := endTime.Sub(strTime)
 				msg_out := fmt.Sprintf("Start request() at %s\nEnd request() at %s\nDuration: %s", strTime.Format("15:04:05.12340"), endTime.Format("15:04:05.12340"),duration)
@@ -195,15 +195,14 @@ to quickly create a Cobra application.`,
 					err = m.Send("Pong")
 					metric_label = "ping"
 				case "/get":
-					msg_out, metric_label = pushRequest(payload)
+					msg_out, metric_label = pushRequest(ctx, payload)
 					err = m.Send(msg_out, telebot.ModeHTML)
 				}
 			default:
-				switch msg_text {
-				case "/get":
-					msg_out, metric_label = pushRequest(payload)
+				if strings.HasPrefix(msg_text, "/get") {
+					msg_out, metric_label = pushRequest(ctx, payload)
 					err = m.Send(msg_out, telebot.ModeHTML)
-				default:
+				} else {
 					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 				}
 			}
