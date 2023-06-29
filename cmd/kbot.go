@@ -176,23 +176,35 @@ to quickly create a Cobra application.`,
 		kbot.Handle(telebot.OnText, func(m telebot.Context) error {
 			ctx := context.Background()
 			otel_ctx, otel_span := otelTracer.Start(ctx,
-				"OnText",
+				"kbot_message_handler",
 				trace.WithAttributes(attribute.String("component", "kbot")),
 				trace.WithAttributes(attribute.String("TraceID", trace.TraceID{}.String())),
 			)
 			defer otel_span.End()
+			logger.Info().Msg("create new otel span")
 			br_ctx := bridgeTracer.ContextWithBridgeSpan(otel_ctx, otel_span)
+			logger.Info().Msg("create bridge for otrc span")
 			otrc_span, otrc_ctx := opentracing.StartSpanFromContext(br_ctx, "kbot_get_app")
 			defer otrc_span.Finish()
+			logger.Info().Msg("create new otrc span")
+			otrc_ch_span := opentracing.StartSpan("kbot_message_handler") //, opentracing.ChildOf(otrc_span.Context())
+			defer otrc_ch_span.Finish()
+			logger.Info().Msg("create new otrc child span")
+			car := opentracing.TextMapCarrier{}
+			writer := opentracing.TextMapWriter(car)
+			writer.Set("component", "kbot")
+			opentracing.GlobalTracer().Inject(otrc_ch_span.Context(), opentracing.TextMap, car)
+			logger.Info().Msg("inject TextMap into child span")
+			otrc_ch_ctx := opentracing.ContextWithSpan(context.Background(), otrc_ch_span)
 			otel_trace_id := otel_span.SpanContext().TraceID().String()
-			otrc_trace_id, _ := tracing.ExtractTraceID(otrc_ctx)
+			otrc_trace_id, _ := tracing.ExtractTraceID(otrc_ch_ctx)
 			payload := m.Message().Payload
 			msg_text := m.Text()
 			msg_out := ""
 			metric_label := "undefined"
 			logger.Info().Str("Income message:", msg_text).Msg(payload)
-			logger.Info().Str("OpenTelemetry TraceID:", otel_trace_id)
-			logger.Info().Str("OpenTracing TraceID:", otrc_trace_id)
+			logger.Info().Str("OpenTelemetry TraceID:", otel_trace_id).Msg("")
+			logger.Info().Str("OpenTracing TraceID:", otrc_trace_id).Msg("")
 
 			pushRequest := func(ctx context.Context, payload string, trace_id string) (string, string) {
 				strTime := time.Now()
@@ -222,18 +234,19 @@ to quickly create a Cobra application.`,
 					err = m.Send("Pong")
 					metric_label = "ping"
 				case "/get":
-					msg_out, metric_label = pushRequest(ctx, payload, otel_trace_id)
+					msg_out, metric_label = pushRequest(otrc_ctx, payload, otel_trace_id)
 					err = m.Send(msg_out, telebot.ModeHTML)
 				}
 			default:
 				if strings.HasPrefix(msg_text, "/get") {
-					msg_out, metric_label = pushRequest(ctx, payload, otel_trace_id)
+					msg_out, metric_label = pushRequest(otrc_ctx, payload, otel_trace_id)
 					err = m.Send(msg_out, telebot.ModeHTML)
 				} else {
 					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 				}
 			}
 			push_metrics(context.Background(), metric_label)
+			opentracing.GlobalTracer().Extract(opentracing.TextMap, opentracing.TextMapReader(car))
 			otrc_span.Finish()
 			return err
 		})
