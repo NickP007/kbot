@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"flag"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -24,11 +25,16 @@ var (
 	app_str string
 	c *client.Client
 	logger log.Logger
+	quit chan struct{}
+	wg sync.WaitGroup
 )
+
 func init() {
 	serverConfig := server.Config{
 		MetricsNamespace: "demo",
 	}
+	serverConfig.RegisterFlags(flag.CommandLine)
+	flag.Parse()
 	serverConfig.LogLevel.Set("debug")
 
 	logger = level.NewFilter(log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout)), serverConfig.LogLevel.Gokit)
@@ -36,16 +42,16 @@ func init() {
 
 	app, err := url.Parse(AppUrl)
 	if err != nil {
-		level.Error(logger).Log("msg", "<push_request> error initializing tracing", "err", err)
+		level.Error(logger).Log("msg", "<push_request init> error initializing tracing", "err", err)
 		return
 	}
 	app_str = app.String()
 	c = client.New(logger)
+	quit = make(chan struct{})
 }
 
 func push_request(ctx context.Context, text string) {
-	quit := make(chan struct{})
-	var wg sync.WaitGroup
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -57,13 +63,13 @@ func push_request(ctx context.Context, text string) {
 			case <-timer.C:
 				req, err := http.NewRequest("GET", app_str, nil)
 				if err != nil {
-					level.Error(logger).Log("msg", "error building request", "err", err)
+					level.Error(logger).Log("msg", "<push_request timer> error building request", "err", err)
 					return
 				}
 				req = req.WithContext(ctx)
 				resp, err := c.Do(req)
 				if err != nil {
-					level.Error(logger).Log("msg", "error doing request", "err", err)
+					level.Error(logger).Log("msg", "<push_request timer> error doing request", "err", err)
 					return
 				}
 				resp.Body.Close()
@@ -86,14 +92,14 @@ func push_request(ctx context.Context, text string) {
 				req, err := http.NewRequest("POST", app_str+"/post", strings.NewReader(form.Encode()))
 				req = req.WithContext(ctx)
 				if err != nil {
-					level.Error(logger).Log("msg", "error building request", "err", err)
+					level.Error(logger).Log("msg", "<push_request ticker> error building request", "err", err)
 					return
 				}
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 				resp, err := c.Do(req)
 				if err != nil {
-					level.Error(logger).Log("msg", "error doing request", "err", err)
+					level.Error(logger).Log("msg", "<push_request ticker> error doing request", "err", err)
 					return
 				}
 				resp.Body.Close()
@@ -101,7 +107,7 @@ func push_request(ctx context.Context, text string) {
 			}
 		}
 	}()
-	// close(quit)
+
 	wg.Wait()
 	return
 }
