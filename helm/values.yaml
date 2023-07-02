@@ -7,28 +7,23 @@ autoscaling:
   enabled: false
 ingress:
   enabled: false
-
 image:
   registry: "docker.io"
   repository: "nickp6"
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.0.5-ff8a6d9"
+  tag: "v1.0.8-efc7228"
   os: linux
   arch: amd64
-
 secret:
   name: kbot-secret
   tokenKey: token
   tokenName: TELE_TOKEN
-  tokenValue: 
-
+  tokenValue:
 env:
   metrics_host: "opentelemetry-collector:4317"
   traces_host: "opentelemetry-collector"
   app_url: "http://app.tns.svc.cluster.local"
-
 service:
   port: 80
-
 securityContext:
   privileged: true

@@ -2,8 +2,18 @@ apiVersion: v1
 entries:
   kbot:
   - apiVersion: v2
+    appVersion: v1.0.8-efc7228
+    created: "2023-07-02T12:47:21.917938135Z"
+    description: <NP Kbot> Helm chart for Kubernetes
+    digest: 1ee82b366cae67d1cd67cf1afe66a7baa70439c527874a3c14f2224218806840
+    name: kbot
+    type: application
+    urls:
+    - https://Nickp007.github.io/kbot/kbot-0.1.4.tgz
+    version: 0.1.4
+  - apiVersion: v2
     appVersion: 1.0.5
-    created: "2023-06-04T01:12:03.9015168Z"
+    created: "2023-07-02T12:47:21.915668415Z"
     description: <NP Kbot> Helm chart for Kubernetes
     digest: d12887454672a696ae5177fb3677c55c923efcdf77b9ee50b55304539638ee4b
     name: kbot
@@ -13,7 +23,7 @@ entries:
     version: 0.1.3
   - apiVersion: v2
     appVersion: 1.0.4
-    created: "2023-06-04T01:12:03.9012476Z"
+    created: "2023-07-02T12:47:21.91517721Z"
     description: <NP Kbot> Helm chart for Kubernetes
     digest: b6e410f42c7f02b9d5d5338b9e8538f58e861a8da938480b066f634323512337
     name: kbot
@@ -23,7 +33,7 @@ entries:
     version: 0.1.2
   - apiVersion: v2
     appVersion: 1.0.4
-    created: "2023-06-04T01:12:03.8977039Z"
+    created: "2023-07-02T12:47:21.914828907Z"
     description: A Helm chart for Kubernetes
     digest: 9ae11db78240fbee96a5cc4484af979b41e878f572430f2ae2cb4984bca9e366
     name: kbot
@@ -31,4 +41,4 @@ entries:
     urls:
     - https://Nickp007.github.io/kbot/kbot-0.1.1.tgz
     version: 0.1.1
-generated: "2023-06-04T01:12:03.8940123Z"
+generated: "2023-07-02T12:47:21.914307803Z"
