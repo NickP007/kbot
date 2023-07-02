@@ -14,9 +14,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/grafana/tns/client"
-	"github.com/weaveworks/common/logging"
 	"github.com/weaveworks/common/server"
-	// "github.com/weaveworks/common/tracing"
 )
 
 var (
@@ -38,7 +36,6 @@ func init() {
 	serverConfig.LogLevel.Set("debug")
 
 	logger = level.NewFilter(log.NewLogfmtLogger(log.NewSyncWriter(os.Stdout)), serverConfig.LogLevel.Gokit)
-	serverConfig.Log = logging.GoKit(logger)
 
 	app, err := url.Parse(AppUrl)
 	if err != nil {
@@ -96,7 +93,6 @@ func push_request(ctx context.Context, text string) {
 					return
 				}
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
 				resp, err := c.Do(req)
 				if err != nil {
 					level.Error(logger).Log("msg", "<push_request ticker> error doing request", "err", err)

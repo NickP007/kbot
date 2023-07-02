@@ -4,32 +4,31 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"context" // "log"
+	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	"github.com/hirosassa/zerodriver"
 	"github.com/opentracing/opentracing-go"
-	"github.com/weaveworks/common/tracing"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
-	jaegerlog "github.com/uber/jaeger-client-go/log"
-	jaegerprom "github.com/uber/jaeger-lib/metrics/prometheus"
-	// otelBridge "go.opentelemetry.io/otel/bridge/opentracing"
+	"github.com/opentracing/opentracing-go/ext"
+	"github.com/opentracing/opentracing-go/log"
+
 	"go.opentelemetry.io/otel"
-	// "go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/attribute"
+	otelBridge "go.opentelemetry.io/otel/bridge/opentracing"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	// "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	// "go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	// sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.18.0"
-	// "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace"
 	telebot "gopkg.in/telebot.v3"
 )
 
@@ -40,16 +39,17 @@ var (
 	MetricsHost = os.Getenv("METRICS_HOST")
 	// TracesHost exporter host:port
 	TracesHost = os.Getenv("TRACES_HOST")
-	cfg *jaegercfg.Configuration
+	//"tempo-distributor.monitoring.svc.cluster.local"
 )
 var otlp_grpc = "4317"
-/*
+
 var (
 	otelTracer            trace.Tracer
 	bridgeTracer          *otelBridge.BridgeTracer
 	wrapperTracerProvider *otelBridge.WrapperTracerProvider
+	otrc_ctx              context.Context
+	otrc_span             opentracing.Span
 )
-*/
 
 // Initialize OpenTelemetry
 func initMetrics(ctx context.Context) {
@@ -87,7 +87,7 @@ func initMetrics(ctx context.Context) {
 func initTraces(ctx context.Context) {
 
 	logger := zerodriver.NewProductionLogger()
-/*
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			// the service name used to display traces in backends
@@ -101,7 +101,9 @@ func initTraces(ctx context.Context) {
 	}
 
 	endpoint := strings.Split(TracesHost, ":")
-	if len(endpoint) == 1 { TracesHost = TracesHost + ":" + otlp_grpc }
+	if len(endpoint) == 1 {
+		TracesHost = TracesHost + ":" + otlp_grpc
+	}
 
 	// Set up a trace exporter
 	traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(TracesHost), otlptracegrpc.WithInsecure())
@@ -125,46 +127,8 @@ func initTraces(ctx context.Context) {
 
 	// set global propagator to tracecontext (the default is no-op).
 	otel.SetTextMapPropagator(propagation.TraceContext{})
-*/
-	endpoint := strings.Split(TracesHost, ":")
-	os.Setenv("JAEGER_AGENT_HOST", endpoint[0])
-	os.Setenv("JAEGER_AGENT_PORT", "14268")
-	os.Setenv("JAEGER_TAGS", "cluster=cloud,namespace=demo")
-	os.Setenv("JAEGER_SAMPLER_TYPE", "const")
-	os.Setenv("JAEGER_SAMPLER_PARAM", "1")
-/*	
-	otrc_closer, err := tracing.NewFromEnv("kbot-j")
-	if err != nil {
-		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> error initializing tracing")
-		return
-	}
-	defer otrc_closer.Close()
-*/
-	opentracing.GlobalTracer()
-	jcfg, err := jaegercfg.FromEnv()
-	cfg = jcfg
-	cfg.ServiceName = AppVersion
-	cfg.Reporter.LogSpans = true
-	if err != nil {
-		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> could not load jaeger tracer configuration")
-		return
-	}
-	if cfg.Sampler.SamplingServerURL == "" && cfg.Reporter.LocalAgentHostPort == "" && cfg.Reporter.CollectorEndpoint == "" {
-		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> no trace report agent, config server, or collector endpoint specified")
-		return 
-	}
-	jLogger := jaegerlog.StdLogger
-	metricsFactory := jaegerprom.New()
 
-	// put the metricsFactory earlier so provided options can override it
-	opts := append([]jaegercfg.Option{jaegercfg.Metrics(metricsFactory)})
-	opts = append([]jaegercfg.Option{jaegercfg.Logger(jLogger)})
-	closer, err := cfg.InitGlobalTracer(AppVersion, opts...)
-	if err != nil {
-		logger.Fatal().Str("Error", err.Error()).Msg("<initTraces> could not initialize jaeger tracer")
-		return
-	}
-	defer closer.Close()
+	opentracing.SetGlobalTracer(bridgeTracer)
 }
 
 func push_metrics(ctx context.Context, payload string) {
@@ -192,6 +156,7 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		logger := zerodriver.NewProductionLogger()
+		logger.Level(zerolog.DebugLevel)
 
 		kbot, err := telebot.NewBot(telebot.Settings{
 			URL:    "",
@@ -208,81 +173,90 @@ to quickly create a Cobra application.`,
 
 		kbot.Handle(telebot.OnText, func(m telebot.Context) error {
 			ctx := context.Background()
-/*			
+
 			otel_ctx, otel_span := otelTracer.Start(ctx,
 				"kbot_message_handler",
 				trace.WithAttributes(attribute.String("component", "kbot")),
-				trace.WithAttributes(attribute.String("TraceID", trace.TraceID{}.String())),
+				trace.WithAttributes(attribute.String("TraceID", trace.TraceID{18, 52, 86, 120, 144}.String())),
 			)
 			defer otel_span.End()
+			otel_trace_id := otel_span.SpanContext().TraceID().String()
 			br_ctx := bridgeTracer.ContextWithBridgeSpan(otel_ctx, otel_span)
-			otrc_span, otrc_ctx := opentracing.StartSpanFromContext(br_ctx, "kbot_get_app")
-			defer otrc_span.Finish()
-			otrc_ch_span := opentracing.StartSpan("kbot_message_handler", opentracing.ChildOf(otrc_span.Context()))
-			defer otrc_ch_span.Finish()
-*/
-			otrc_span, otrc_ctx := opentracing.StartSpanFromContext(ctx, "kbot_get_app")
-			// otrc_span := tracer.StartSpan("kbot_get_app")
-			defer otrc_span.Finish()
-			car := opentracing.TextMapCarrier{}
-			writer := opentracing.TextMapWriter(car)
-			writer.Set("component", "kbot")
-			opentracing.GlobalTracer().Inject(otrc_span.Context(), opentracing.TextMap, car)
-			// otrc_ctx := opentracing.ContextWithSpan(context.Background(), otrc_span)
-			// otel_trace_id := otel_span.SpanContext().TraceID().String()
-			// otrc_ctx := opentracing.ContextWithSpan(ctx, otrc_span)
-			otrc_trace_id, _ := tracing.ExtractTraceID(otrc_ctx)
-			payload := m.Message().Payload
-			msg_text := m.Text()
-			msg_out := ""
-			metric_label := "undefined"
-			logger.Info().Msgf("Income message: %s, payload: %s", msg_text, payload)
-			//logger.Info().Msgf("OpenTelemetry TraceID=%s", otel_trace_id)
-			logger.Info().Msgf("OpenTracing ServiceName=%s, TraceID=%s", cfg.ServiceName, otrc_trace_id)
-			logger.Info().Msgf("<kbot_handler> cfg: %s", cfg)
+			otrc_span, otrc_ctx = opentracing.StartSpanFromContext(br_ctx, "kbot_start_span")
 
-			pushRequest := func(ctx context.Context, payload string, trace_id string) (string, string) {
+			setOtrcSpanAttr := func(operationName string) {
+				otrc_span.SetOperationName(fmt.Sprintf("command: %s", operationName))
+				otrc_span.LogFields(log.String("event", "start kbot answer"), log.String("type", operationName), log.String("start time", time.Now().String()))
+				ext.PeerService.Set(otrc_span, fmt.Sprintf("%s-kbot-message", operationName))
+				ext.Component.Set(otrc_span, fmt.Sprintf("%s-kbot-message-handler", operationName))
+				ext.SpanKind.Set(otrc_span, ext.SpanKindRPCClientEnum)
+				ext.SpanKindRPCClient.Set(otrc_span)
+			}
+
+			endOtrcSpan := func() {
+				otrc_span.LogFields(log.String("event", "end kbot answer"), log.String("end time", time.Now().String()))
+				otrc_span.Finish()
+			}
+
+			pushRequest := func(payload string, trace_id string) (string, string) {
 				strTime := time.Now()
-				push_request(ctx, payload)
+				push_request(otrc_ctx, payload)
 				endTime := time.Now()
 				duration := endTime.Sub(strTime)
 				msg_out := fmt.Sprintf("<b>Trace request()</b> start at %s, end at %s\nDuration: %s, TraceID: %s", strTime.Format("15:04:05.123"), endTime.Format("15:04:05.123"), duration, trace_id)
 				metric_label := "get"
 				return msg_out, metric_label
 			}
+
+			payload := m.Message().Payload
+			msg_text := m.Text()
+			msg_out := ""
+			metric_label := "undefined"
+			logger.Info().Msgf("Income message: %s, payload: %s", msg_text, payload)
+			logger.Info().Msgf("OpenTelemetry traceID=%s", otel_trace_id)
+
 			switch payload {
 			case "hello":
-				err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
 				metric_label = "hello"
+				setOtrcSpanAttr(metric_label)
+				err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
 			case "":
 				switch msg_text {
 				case "/start":
-					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 					metric_label = "start"
+					setOtrcSpanAttr(metric_label)
+					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 				case "/help":
-					err = m.Send("NP Kbot help page... be soon")
 					metric_label = "help"
+					setOtrcSpanAttr(metric_label)
+					err = m.Send("NP Kbot help page... be soon")
 				case "/hello", "hello":
-					err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
 					metric_label = "hello"
+					setOtrcSpanAttr(metric_label)
+					err = m.Send(fmt.Sprintf("<b>Hello, %s</b>\nI'm %s!", m.Sender().FirstName, AppVersion), telebot.ModeHTML)
 				case "ping":
-					err = m.Send("Pong")
 					metric_label = "ping"
+					setOtrcSpanAttr(metric_label)
+					err = m.Send("Pong")
 				case "/get":
-					msg_out, metric_label = pushRequest(otrc_ctx, payload, otrc_trace_id)
+					setOtrcSpanAttr("get")
+					msg_out, metric_label = pushRequest(payload, otel_trace_id)
 					err = m.Send(msg_out, telebot.ModeHTML)
+				default:
+					setOtrcSpanAttr(metric_label)
 				}
 			default:
 				if strings.HasPrefix(msg_text, "/get") {
-					msg_out, metric_label = pushRequest(otrc_ctx, payload, otrc_trace_id)
+					setOtrcSpanAttr("get")
+					msg_out, metric_label = pushRequest(payload, otel_trace_id)
 					err = m.Send(msg_out, telebot.ModeHTML)
 				} else {
+					setOtrcSpanAttr(metric_label)
 					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
 				}
 			}
 			push_metrics(context.Background(), metric_label)
-			opentracing.GlobalTracer().Extract(opentracing.TextMap, opentracing.TextMapReader(car))
-			otrc_span.Finish()
+			endOtrcSpan()
 			return err
 		})
 		kbot.Start()
@@ -290,7 +264,6 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
 	ctx := context.Background()
 	initMetrics(ctx)
 	initTraces(ctx)
