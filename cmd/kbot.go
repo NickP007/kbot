@@ -200,7 +200,7 @@ to quickly create a Cobra application.`,
 
 			pushRequest := func(payload string, trace_id string) (string, string) {
 				strTime := time.Now()
-				push_request(otrc_ctx, payload)
+				push_request(payload)
 				endTime := time.Now()
 				duration := endTime.Sub(strTime)
 				msg_out := fmt.Sprintf("<b>Trace request()</b> start at %s, end at %s\nDuration: %s, TraceID: %s", strTime.Format("15:04:05.123"), endTime.Format("15:04:05.123"), duration, trace_id)
@@ -225,7 +225,7 @@ to quickly create a Cobra application.`,
 				case "/start":
 					metric_label = "start"
 					setOtrcSpanAttr(metric_label)
-					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n ping - get 'Pong' response", telebot.ModeHTML)
+					err = m.Send("<b>Usage:</b>\n /help - for help message\n hello - to view 'hello message'\n /get &lt;text&gt; - send a request to an external server\n ping - get 'Pong' response", telebot.ModeHTML)
 				case "/help":
 					metric_label = "help"
 					setOtrcSpanAttr(metric_label)

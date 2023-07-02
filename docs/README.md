@@ -108,4 +108,4 @@ helm search repo
 
 4.4 Перевіримо роботу застосунку, відкривши в Telegram чат-бот @NickP_study_bot та виконавши команду `/start`:
 
-![Перевірка роботи Telegram-боту](kbot_run01.png)
+![Перевірка роботи Telegram-боту](img/kbot_run01.png)
